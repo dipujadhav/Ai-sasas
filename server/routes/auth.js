@@ -9,6 +9,10 @@ const router = express.Router();
 // @desc    Register a new user
 // @access  Public
 router.post('/register', [
+  body('userId')
+    .trim()
+    .notEmpty()
+    .withMessage('User ID is required'),
   body('email')
     .isEmail()
     .withMessage('Please provide a valid email')
@@ -35,16 +39,19 @@ router.post('/register', [
       });
     }
 
-    const { email, password, firstName, lastName, phone, role } = req.body;
+    const { userId, email, password, firstName, lastName, phone, role } = req.body;
 
     // Check if user already exists
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ 
+      $or: [{ email }, { userId: userId.toUpperCase() }] 
+    });
     if (existingUser) {
-      return res.status(400).json({ message: 'User already exists with this email' });
+      return res.status(400).json({ message: 'User already exists with this email or User ID' });
     }
 
     // Create user
     const user = new User({
+      userId: userId.toUpperCase(),
       email,
       password,
       firstName,
@@ -64,6 +71,7 @@ router.post('/register', [
       token,
       user: {
         id: user._id,
+        userId: user.userId,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
@@ -81,13 +89,13 @@ router.post('/register', [
 });
 
 // @route   POST /api/auth/login
-// @desc    Login user
+// @desc    Login user with ID and password
 // @access  Public
 router.post('/login', [
-  body('email')
-    .isEmail()
-    .withMessage('Please provide a valid email')
-    .normalizeEmail(),
+  body('userId')
+    .trim()
+    .notEmpty()
+    .withMessage('User ID is required'),
   body('password')
     .notEmpty()
     .withMessage('Password is required'),
@@ -102,12 +110,12 @@ router.post('/login', [
       });
     }
 
-    const { email, password } = req.body;
+    const { userId, password } = req.body;
 
     // Check if user exists
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findOne({ userId: userId.toUpperCase() }).select('+password');
     if (!user) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+      return res.status(401).json({ message: 'Invalid User ID or password' });
     }
 
     // Check if account is active
@@ -118,7 +126,7 @@ router.post('/login', [
     // Check password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+      return res.status(401).json({ message: 'Invalid User ID or password' });
     }
 
     // Update last login
@@ -134,6 +142,7 @@ router.post('/login', [
       token,
       user: {
         id: user._id,
+        userId: user.userId,
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
